@@ -1,3 +1,7 @@
+import difflib
+import pandas as pd
+
+
 def weighted_score(scores, weights):
     """
     Calculates the weighted score given a list of scores and corresponding weights.
@@ -19,14 +23,6 @@ def weighted_score(scores, weights):
     weighted_sum = sum(s * w for s, w in zip(scores, weights))
     return weighted_sum / total_weight
 
-# Example usage
-scores = [0.8, 0.7, 0.9, 0.6, 0.5]
-weights = [0.2, 0.1, 0.3, 0.25, 0.15]
-
-print(weighted_score(scores, weights))  # Output: weighted average score
-
-import difflib
-import pandas as pd
 
 def autocomplete(df: pd.DataFrame, X: str) -> str:
     """
