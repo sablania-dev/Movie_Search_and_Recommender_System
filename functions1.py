@@ -62,10 +62,12 @@ def get_k_recommendations(df: pd.DataFrame, title: str, k: int) -> pd.DataFrame:
     # Compute similarity scores
     df = actors_director_keywords_genres(df, title)
     
-    # Calculate weighted score
-    df['weighted_score'] = weighted_score(
-        [df['actor_score'], df['genre_score'], df['kwd_score'], df['diro_score']],
-        [0.25, 0.25, 0.25, 0.25]
+    # Calculate weighted score for each row
+    df['weighted_score'] = df.apply(
+        lambda row: weighted_score(
+            [row['actor_score'], row['genre_score'], row['kwd_score'], row['diro_score']],
+            [0.25, 0.25, 0.25, 0.25]
+        ), axis=1
     )
     
     # Sort by weighted score and return top k recommendations
