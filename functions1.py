@@ -13,6 +13,10 @@ def weighted_score(scores, weights):
     if len(scores) != len(weights):
         raise ValueError("Scores and weights must have the same number of elements.")
 
+    # Ensure inputs are scalar values
+    scores = [float(s) if isinstance(s, (int, float)) else 0 for s in scores]
+    weights = [float(w) if isinstance(w, (int, float)) else 0 for w in weights]
+
     if not (all(0 <= s <= 1 for s in scores) and all(0 <= w <= 1 for w in weights)):
         raise ValueError("All scores and weights must be between 0 and 1.")
 
@@ -61,6 +65,11 @@ def get_k_recommendations(df: pd.DataFrame, title: str, k: int) -> pd.DataFrame:
     
     # Compute similarity scores
     df = actors_director_keywords_genres(df, title)
+    
+    # Ensure required columns exist and are numeric
+    for col in ['actor_score', 'genre_score', 'kwd_score', 'diro_score']:
+        if col not in df.columns or not pd.api.types.is_numeric_dtype(df[col]):
+            raise ValueError(f"Column '{col}' is missing or not numeric in the DataFrame.")
     
     # Calculate weighted score for each row
     df['weighted_score'] = df.apply(
