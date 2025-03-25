@@ -12,13 +12,18 @@ search_button = st.button("🔍 Search")
 
 # Load Real DataFrame
 data = load_data(0)
+
+print(data.head())
+
 data = preprocess_data(data)
+
+# print(data.head())
 
 # Display REAL search results when button is clicked
 if search_button:
     if user_input:
-        complete_input = autocomplete(data, user_input)
-        filtered_df = get_k_recommendations(data, user_input, 10)
+        complete_input_string = autocomplete(data, user_input)
+        filtered_df = get_k_recommendations(data, complete_input_string, 10)
         if not filtered_df.empty:
             st.dataframe(filtered_df)
         else:

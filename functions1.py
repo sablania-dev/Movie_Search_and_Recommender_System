@@ -1,6 +1,6 @@
 import difflib
 import pandas as pd
-
+from individual_recommenders import actors_director_keywords_genres
 
 def weighted_score(scores, weights):
     """
@@ -43,7 +43,33 @@ def autocomplete(df: pd.DataFrame, X: str) -> str:
     
     return matches[0] if matches else "No match found"
 
-# Example usage:
-data = {'title': ['Titanic', 'Avatar', 'Inception', 'Interstellar']}
-df = pd.DataFrame(data)
-print(autocomplete(df, 'titan'))  # Output: 'Titanic'
+
+def get_k_recommendations(df: pd.DataFrame, title: str, k: int) -> pd.DataFrame:
+    """
+    Get top k movie recommendations based on similarity scores.
+    
+    Parameters:
+    df (pd.DataFrame): DataFrame containing movie data with similarity scores.
+    title (str): The title of the movie for which recommendations are to be found.
+    k (int): The number of recommendations to return.
+    
+    Returns:
+    pd.DataFrame: DataFrame containing top k recommended movies.
+    """
+    if title not in df['title'].values:
+        raise ValueError("Movie not found in dataset.")
+    
+    # Compute similarity scores
+    df = actors_director_keywords_genres(df, title)
+    
+    # Calculate weighted score
+    df['weighted_score'] = weighted_score(
+        [df['actor_score'], df['genre_score'], df['kwd_score'], df['diro_score']],
+        [0.25, 0.25, 0.25, 0.25]
+    )
+    
+    # Sort by weighted score and return top k recommendations
+    recommendations = df.sort_values(by='weighted_score', ascending=False).head(k)
+    
+    return recommendations[['title', 'weighted_score']]
+

@@ -68,3 +68,5 @@ def preprocess_data(df):
 
     for feature in features:
         df[feature] = df[feature].apply(clean_data)
+    
+    return df
