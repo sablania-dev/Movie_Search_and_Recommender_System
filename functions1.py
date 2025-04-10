@@ -2,7 +2,7 @@ import difflib
 import pandas as pd
 from individual_recommenders import actors_director_keywords_genres
 from loading_and_preprocessing import preprocess_collaborative_data
-from individual_recommenders import svd_recommender, cosine_recommender
+from individual_recommenders import svd_recommender, cosine_recommender, demographic_filtering
 import os
 from PIL import Image
 import streamlit as st
@@ -53,14 +53,31 @@ def autocomplete(df: pd.DataFrame, X: str) -> str:
     return matches[0] if matches else "No match found"
 
 
-def get_k_recommendations(df: pd.DataFrame, title: str, k: int) -> pd.DataFrame:
+def normalize_scores(series, mean=0.5, std=0.4):
     """
-    Get top k movie recommendations based on similarity scores.
+    Normalizes a pandas Series using standardization with a default mean of 0.5 and std of 0.4.
+    Values outside the range [0, 1] are clipped to the limits.
+    
+    Parameters:
+    series (pd.Series): The series to normalize.
+    mean (float): The target mean for normalization.
+    std (float): The target standard deviation for normalization.
+    
+    Returns:
+    pd.Series: The normalized series.
+    """
+    normalized = (series - series.mean()) / series.std() * std + mean
+    return normalized.clip(0, 1)  # Clip values to the range [0, 1]
+
+def get_k_recommendations(df: pd.DataFrame, title: str, k: int, weights=None) -> pd.DataFrame:
+    """
+    Get top k movie recommendations based on similarity scores and demographic score.
     
     Parameters:
     df (pd.DataFrame): DataFrame containing movie data with similarity scores.
     title (str): The title of the movie for which recommendations are to be found.
     k (int): The number of recommendations to return.
+    weights (list): List of weights for actor, genre, keywords, director, and demographic scores.
     
     Returns:
     pd.DataFrame: DataFrame containing top k recommended movies.
@@ -68,19 +85,29 @@ def get_k_recommendations(df: pd.DataFrame, title: str, k: int) -> pd.DataFrame:
     if title not in df['title'].values:
         raise ValueError("Movie not found in dataset.")
     
+    # Default weights if none are provided
+    if weights is None:
+        weights = [0.2, 0.2, 0.2, 0.2, 0.2]
+    
     # Compute similarity scores
     df = actors_director_keywords_genres(df, title)
+    df = demographic_filtering(df)
     
     # Ensure required columns exist and are numeric
-    for col in ['actor_score', 'genre_score', 'kwd_score', 'diro_score']:
+    for col in ['actor_score', 'genre_score', 'kwd_score', 'diro_score', 'dmg_score']:
         if col not in df.columns or not pd.api.types.is_numeric_dtype(df[col]):
             raise ValueError(f"Column '{col}' is missing or not numeric in the DataFrame.")
     
-    # Calculate weighted score for each row
+    # Normalize scores using the new normalization function and add new columns
+    for col in ['actor_score', 'genre_score', 'kwd_score', 'diro_score', 'dmg_score']:
+        norm_col = f"norm_{col}"
+        df[norm_col] = normalize_scores(df[col])
+    
+    # Calculate weighted score for each row, incorporating normalized scores
     df['weighted_score'] = df.apply(
         lambda row: weighted_score(
-            [row['actor_score'], row['genre_score'], row['kwd_score'], row['diro_score']],
-            [0.25, 0.25, 0.25, 0.25]
+            [row['norm_actor_score'], row['norm_genre_score'], row['norm_kwd_score'], row['norm_diro_score'], row['norm_dmg_score']],
+            weights
         ), axis=1
     )
     
@@ -144,6 +171,6 @@ def display_results_with_images(results_df):
             if 'vote_count' in row:
                 st.write(f"**Votes:** {row['vote_count']}")
             if 'genres' in row:
-                st.write(f"**Genres:** {', '.join(row['genres'])}")
+                st.write(f"**Genres:** {row['genres']}")
             if 'director' in row:
                 st.write(f"**Director:** {row['director']}")
