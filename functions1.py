@@ -114,7 +114,7 @@ def get_k_recommendations(df: pd.DataFrame, title: str, k: int, weights=None) ->
     # Sort by weighted score and return top k recommendations
     recommendations = df.sort_values(by='weighted_score', ascending=False).head(k)
     
-    return recommendations[['title', 'weighted_score']]
+    return recommendations
 
 def get_collab_recommendation_score_for_all_movies(user_item_matrix, user_id, svd_predictions):
     """
@@ -141,7 +141,7 @@ def get_collab_recommendation_score_for_all_movies(user_item_matrix, user_id, sv
 def display_results_with_images(results_df):
     """
     Displays results horizontally with images and titles.
-    Shows movie metadata on the right side of each image.
+    Shows movie metadata on the right side of each image, including weighted score.
     If an image does not exist, a blank template is shown.
     """
     current_directory = os.getcwd()
@@ -166,11 +166,13 @@ def display_results_with_images(results_df):
             st.image(image, caption=f"{movie_id}: {title}", width=150)
         with col2:
             st.write(f"**Title:** {title}")
-            if 'vote_average' in row:
+            if 'weighted_score' in row and not pd.isna(row['weighted_score']):
+                st.write(f"**Weighted Score:** {row['weighted_score']:.2f}")
+            if 'vote_average' in row and not pd.isna(row['vote_average']):
                 st.write(f"**Rating:** {row['vote_average']}")
-            if 'vote_count' in row:
+            if 'vote_count' in row and not pd.isna(row['vote_count']):
                 st.write(f"**Votes:** {row['vote_count']}")
-            if 'genres' in row:
-                st.write(f"**Genres:** {row['genres']}")
-            if 'director' in row:
+            if 'genres' in row and isinstance(row['genres'], list):
+                st.write(f"**Genres:** {', '.join(row['genres'])}")
+            if 'director' in row and not pd.isna(row['director']):
                 st.write(f"**Director:** {row['director']}")

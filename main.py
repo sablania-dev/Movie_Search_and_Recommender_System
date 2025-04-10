@@ -139,7 +139,8 @@ with col_middle:
 
 # Left Column: Scoring Distribution
 with col_left:
-    st.subheader("Scoring Distribution")
+    st.subheader("Debugging")
+    st.write("Scoring Distribution")
     images_folder = os.path.join(os.getcwd(), "images")
     os.makedirs(images_folder, exist_ok=True)
     
