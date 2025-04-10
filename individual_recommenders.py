@@ -38,6 +38,21 @@ def actors_director_keywords_genres(df, title):
 
 #### DEMOGRAPHIC FILTERING ####
 
+def demographic_filtering(df, quantile=0.9):
+    """
+    Applies demographic filtering to the DataFrame.
+    Adds a 'dmg_score' column based on the IMDB weighted rating formula.
+    Returns the updated DataFrame.
+    """
+    C = df['vote_average'].mean()
+    m = df['vote_count'].quantile(quantile)
+    df = df.copy()
+    df['dmg_score'] = df.apply(
+        lambda x: (x['vote_count'] / (x['vote_count'] + m) * x['vote_average']) + 
+                  (m / (m + x['vote_count']) * C), axis=1
+    )
+    return df
+
 #### PLOT BASED ####
 
 #### COLLABORATIVE FILTERING ####

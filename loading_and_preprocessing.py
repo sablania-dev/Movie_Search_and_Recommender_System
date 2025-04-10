@@ -1,21 +1,24 @@
+import os
 import pandas as pd
 import numpy as np
 
 
 def load_data(which_data=0):
-    
-    if which_data == 0:
-        df1 = pd.read_csv('data/tmdb_5000_credits.csv')
-        df2 = pd.read_csv('data/tmdb_5000_movies.csv')
+    try:
+        if which_data == 0:
+            df1 = pd.read_csv('data/tmdb_5000_credits.csv')
+            df2 = pd.read_csv('data/tmdb_5000_movies.csv')
 
-        # Let's join the two dataset on the 'id' column
-        df1.columns = ['id', 'tittle', 'cast', 'crew']
-        df2 = df2.merge(df1, on='id')
+            # Let's join the two dataset on the 'id' column
+            df1.columns = ['id', 'tittle', 'cast', 'crew']
+            df2 = df2.merge(df1, on='id')
 
-        # drop column tittle from df2
-        df2 = df2.drop('tittle', axis=1)
+            # drop column tittle from df2
+            df2 = df2.drop('tittle', axis=1)
 
-        return df2
+            return df2
+    except Exception as e:
+        raise RuntimeError(f"Error loading data: {e}")
 
 # Parse the stringified features into their corresponding python objects
 from ast import literal_eval
@@ -76,10 +79,13 @@ def load_collaborative_data():
     Loads the raw data required for collaborative filtering.
     Returns ratings, links, and movies_metadata DataFrames.
     """
-    ratings = pd.read_csv('data/ratings.csv')
-    links = pd.read_csv('data/links.csv')
-    movies_metadata = pd.read_csv('data/movies_metadata.csv', low_memory=False)
-    return ratings, links, movies_metadata
+    try:
+        ratings = pd.read_csv('data/ratings.csv')
+        links = pd.read_csv('data/links.csv')
+        movies_metadata = pd.read_csv('data/movies_metadata.csv', low_memory=False)
+        return ratings, links, movies_metadata
+    except Exception as e:
+        raise RuntimeError(f"Error loading collaborative data: {e}")
 
 def preprocess_collaborative_data(ratings, links, movies_metadata):
     """
@@ -109,3 +115,33 @@ def preprocess_collaborative_data(ratings, links, movies_metadata):
     user_item_matrix = ratings.pivot_table(index='userId', columns='title', values='rating', fill_value=0)
     
     return user_item_matrix
+
+def load_or_preprocess_data():
+    """
+    Checks if preprocessed data exists. If not, preprocesses and saves the data.
+    """
+    preprocessed_file = 'data/preprocessed_movies.csv'
+    if os.path.exists(preprocessed_file):
+        return pd.read_csv(preprocessed_file)
+    else:
+        raw_data = load_data(0)
+        preprocessed_data = preprocess_data(raw_data)
+        preprocessed_data.to_csv(preprocessed_file, index=False)
+        return preprocessed_data
+
+def load_or_preprocess_collaborative_data():
+    """
+    Checks if preprocessed collaborative data exists in Parquet format.
+    If not, preprocesses and saves the data in Parquet format.
+    """
+    preprocessed_file = 'data/preprocessed_user_item_matrix.parquet'
+    if os.path.exists(preprocessed_file):
+        # Load preprocessed collaborative data in Parquet format
+        user_item_matrix = pd.read_parquet(preprocessed_file)
+        return user_item_matrix
+    else:
+        # Preprocess and save collaborative data
+        ratings, links, movies_metadata = load_collaborative_data()
+        user_item_matrix = preprocess_collaborative_data(ratings, links, movies_metadata)
+        user_item_matrix.to_parquet(preprocessed_file)
+        return user_item_matrix

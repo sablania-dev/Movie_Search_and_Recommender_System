@@ -3,6 +3,9 @@ import pandas as pd
 from individual_recommenders import actors_director_keywords_genres
 from loading_and_preprocessing import preprocess_collaborative_data
 from individual_recommenders import svd_recommender, cosine_recommender
+import os
+from PIL import Image
+import streamlit as st
 
 def weighted_score(scores, weights):
     """
@@ -107,3 +110,40 @@ def get_collab_recommendation_score_for_all_movies(user_item_matrix, user_id, sv
     collab_scores = (collab_scores - collab_scores.min()) / (collab_scores.max() - collab_scores.min())
     
     return pd.DataFrame({'title': collab_scores.index, 'collab_score': collab_scores.values}).sort_values(by='collab_score', ascending=False)
+
+def display_results_with_images(results_df):
+    """
+    Displays results horizontally with images and titles.
+    Shows movie metadata on the right side of each image.
+    If an image does not exist, a blank template is shown.
+    """
+    current_directory = os.getcwd()
+    images_folder = os.path.join(current_directory, "images")
+    
+    for index, row in results_df.iterrows():
+        # Use the index as the movie ID
+        movie_id = index
+        title = row['title']
+        image_path = os.path.join(images_folder, f"{movie_id}.jpg")
+        
+        # Check if the image exists
+        if os.path.exists(image_path):
+            image = Image.open(image_path)
+        else:
+            # Create a blank template if the image does not exist
+            image = Image.new('RGB', (200, 300), color='gray')
+        
+        # Display the image and metadata side by side
+        col1, col2 = st.columns([1, 2])
+        with col1:
+            st.image(image, caption=f"{movie_id}: {title}", width=150)
+        with col2:
+            st.write(f"**Title:** {title}")
+            if 'vote_average' in row:
+                st.write(f"**Rating:** {row['vote_average']}")
+            if 'vote_count' in row:
+                st.write(f"**Votes:** {row['vote_count']}")
+            if 'genres' in row:
+                st.write(f"**Genres:** {', '.join(row['genres'])}")
+            if 'director' in row:
+                st.write(f"**Director:** {row['director']}")
