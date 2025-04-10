@@ -1,6 +1,8 @@
 import difflib
 import pandas as pd
 from individual_recommenders import actors_director_keywords_genres
+from loading_and_preprocessing import preprocess_collaborative_data
+from individual_recommenders import svd_recommender, cosine_recommender
 
 def weighted_score(scores, weights):
     """
@@ -84,3 +86,24 @@ def get_k_recommendations(df: pd.DataFrame, title: str, k: int) -> pd.DataFrame:
     
     return recommendations[['title', 'weighted_score']]
 
+def get_collab_recommendation_score_for_all_movies(user_item_matrix, user_id, svd_predictions):
+    """
+    Provides collaborative filtering recommendations based on a user's rating history.
+    """
+    if user_id not in user_item_matrix.index:
+        raise ValueError("User ID not found in the dataset.")
+    
+    # Use precomputed SVD predictions
+    user_svd_scores = svd_predictions.loc[user_id]
+    
+    # Compute user-user similarity using cosine similarity
+    user_similarity = cosine_recommender(user_item_matrix)
+    similar_users = user_similarity[user_id].drop(user_id)
+    
+    # Weighted collaborative score (blending SVD and user similarity)
+    collab_scores = (user_svd_scores * 0.7) + (similar_users.mean() * 0.3)
+    
+    # Normalize scores to range 0-1
+    collab_scores = (collab_scores - collab_scores.min()) / (collab_scores.max() - collab_scores.min())
+    
+    return pd.DataFrame({'title': collab_scores.index, 'collab_score': collab_scores.values}).sort_values(by='collab_score', ascending=False)

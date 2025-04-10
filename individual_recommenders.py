@@ -1,4 +1,6 @@
 import pandas as pd
+from sklearn.decomposition import TruncatedSVD
+from sklearn.metrics.pairwise import cosine_similarity
 
 #### CONTENT-BASED FILTERING ####
 #### ACTOR, DIRECTOR, KEYWORDS, GENRES ####
@@ -39,3 +41,21 @@ def actors_director_keywords_genres(df, title):
 #### PLOT BASED ####
 
 #### COLLABORATIVE FILTERING ####
+
+def svd_recommender(user_item_matrix, num_components=20):
+    """
+    Applies Singular Value Decomposition (SVD) for collaborative filtering.
+    Returns predicted ratings matrix.
+    """
+    svd = TruncatedSVD(n_components=num_components)
+    svd_matrix = svd.fit_transform(user_item_matrix)
+    reconstructed_matrix = svd_matrix @ svd.components_
+    return pd.DataFrame(reconstructed_matrix, index=user_item_matrix.index, columns=user_item_matrix.columns)
+
+def cosine_recommender(user_item_matrix):
+    """
+    Computes cosine similarity between users and recommends movies based on similar users.
+    Returns similarity matrix.
+    """
+    similarity_matrix = cosine_similarity(user_item_matrix)
+    return pd.DataFrame(similarity_matrix, index=user_item_matrix.index, columns=user_item_matrix.index)
