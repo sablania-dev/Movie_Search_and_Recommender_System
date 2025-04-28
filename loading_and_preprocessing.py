@@ -131,17 +131,17 @@ def load_or_preprocess_data():
 
 def load_or_preprocess_collaborative_data():
     """
-    Checks if preprocessed collaborative data exists in Parquet format.
-    If not, preprocesses and saves the data in Parquet format.
+    Checks if preprocessed collaborative data exists in CSV format.
+    If not, preprocesses and saves the data in CSV format.
     """
-    preprocessed_file = 'data/preprocessed_user_item_matrix.parquet'
+    preprocessed_file = 'data/preprocessed_user_item_matrix.csv'
     if os.path.exists(preprocessed_file):
-        # Load preprocessed collaborative data in Parquet format
-        user_item_matrix = pd.read_parquet(preprocessed_file)
+        # Load preprocessed collaborative data in CSV format
+        user_item_matrix = pd.read_csv(preprocessed_file, index_col=0)
         return user_item_matrix
     else:
         # Preprocess and save collaborative data
         ratings, links, movies_metadata = load_collaborative_data()
         user_item_matrix = preprocess_collaborative_data(ratings, links, movies_metadata)
-        user_item_matrix.to_parquet(preprocessed_file)
+        user_item_matrix.to_csv(preprocessed_file)
         return user_item_matrix

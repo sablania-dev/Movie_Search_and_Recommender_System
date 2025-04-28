@@ -11,13 +11,16 @@ from loading_and_preprocessing import (
     load_or_preprocess_data,
     load_or_preprocess_collaborative_data,
 )
-from functions1 import autocomplete, get_k_recommendations, get_collab_recommendation_score_for_all_movies, display_results_with_images
+from functions1 import autocomplete, get_k_recommendations, get_collab_recommendation_score_for_all_movies, display_results_with_images, update_weights, get_content_based_recommendations
 
 # Set Streamlit layout to wide
 st.set_page_config(layout="wide")
 
 # Load data at the top so it is accessible throughout the script
 data = load_or_preprocess_data()
+
+# Load collaborative filtering data
+user_item_matrix = load_or_preprocess_collaborative_data()
 
 # Split the screen into three columns
 col_left, col_middle, col_right = st.columns([1, 4, 1])
@@ -36,16 +39,6 @@ with col_right:
         "Director Score Weight": 0.2,
         "Demographic Score Weight": 0.2,
     }
-    
-    # Function to update weights dynamically
-    def update_weights(changed_key, new_value):
-        remaining_keys = [key for key in weights.keys() if key != changed_key]
-        remaining_total = sum(weights[key] for key in remaining_keys)
-        if remaining_total > 0:
-            scale_factor = (1 - new_value) / remaining_total
-            for key in remaining_keys:
-                weights[key] *= scale_factor
-        weights[changed_key] = new_value
 
     # Create sliders dynamically
     for key in weights.keys():
@@ -55,15 +48,12 @@ with col_right:
             1.0, 
             weights[key], 
             0.01, 
-            on_change=lambda k=key: update_weights(k, st.session_state[k]),
+            on_change=lambda k=key: update_weights(weights, k, st.session_state[k]),
             key=key
         )
-    
-    # Normalize weights to ensure they sum to 1
-    total_weight = sum(weights.values())
-    if total_weight > 0:
-        for key in weights.keys():
-            weights[key] /= total_weight
+
+    # Normalize weights using softmax
+    weights = update_weights(weights, None, None)
 
     # Extract normalized weights
     weight_actor = weights["Actor Score Weight"]
@@ -72,13 +62,17 @@ with col_right:
     weight_director = weights["Director Score Weight"]
     weight_demographic = weights["Demographic Score Weight"]
 
-    # Display the current weights at the bottom
+    # Add a temperature slider
+    temperature = st.slider("Temperature", 0.1, 2.0, 1.0, 0.1)
+
+    # Display the current weights and temperature at the bottom
     st.write("### Current Weights")
     st.write(f"Actor Score Weight: {weight_actor:.2f}")
     st.write(f"Genre Score Weight: {weight_genre:.2f}")
     st.write(f"Keywords Score Weight: {weight_keywords:.2f}")
     st.write(f"Director Score Weight: {weight_director:.2f}")
     st.write(f"Demographic Score Weight: {weight_demographic:.2f}")
+    st.write(f"Temperature: {temperature:.1f}")
 
 
 
@@ -92,13 +86,13 @@ with col_middle:
     user_id = st.text_input("User ID", placeholder="Enter your User ID")
     password = st.text_input("Password", type="password", placeholder="Enter your Password")
     login_button = st.button("Login")
+    
 
     if login_button:
-        if password == "1234":  # Static password for all users
+
+        if (int(user_id) in user_item_matrix.index) and password == "1234":  # Static password for all users
             st.success("Login successful!")
-            
-            # Load collaborative filtering data
-            user_item_matrix = load_or_preprocess_collaborative_data()
+            st.write(f"Welcome, User {user_id}!")
             
             if int(user_id) in user_item_matrix.index:
                 # Generate collaborative filtering recommendations
@@ -106,8 +100,29 @@ with col_middle:
                 recommendations = get_collab_recommendation_score_for_all_movies(user_item_matrix, int(user_id), svd_predictions)
                 
                 st.subheader("Recommended For You")
+                # Sample recommendations based on temperature
+                recommendations = recommendations.sample(
+                    n=10, 
+                    weights=(recommendations['collab_score'] ** (1 / temperature))
+                )
                 # Display recommendations with images
-                display_results_with_images(recommendations.head(10))
+                display_results_with_images(recommendations)
+                
+                # Generate content-based filtering recommendations
+                content_recommendations = get_content_based_recommendations(
+                    data, 
+                    int(user_id), 
+                    user_item_matrix, 
+                    [weight_actor, weight_genre, weight_keywords, weight_director, weight_demographic],
+                    temperature=temperature
+                )
+                
+                if not content_recommendations.empty:
+                    st.subheader("Content-Based Recommendations")
+                    # Display content-based recommendations with images
+                    display_results_with_images(content_recommendations)
+                else:
+                    st.write("No content-based recommendations available.")
             else:
                 st.error("User ID not found in the dataset.")
         else:

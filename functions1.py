@@ -2,10 +2,11 @@ import difflib
 import pandas as pd
 from individual_recommenders import actors_director_keywords_genres
 from loading_and_preprocessing import preprocess_collaborative_data
-from individual_recommenders import svd_recommender, cosine_recommender, demographic_filtering
+from individual_recommenders import svd_recommender, cosine_recommender, demographic_filtering, jaccard_similarity
 import os
 from PIL import Image
 import streamlit as st
+import numpy as np
 
 def weighted_score(scores, weights):
     """
@@ -176,3 +177,103 @@ def display_results_with_images(results_df):
                 st.write(f"**Genres:** {', '.join(row['genres'])}")
             if 'director' in row and not pd.isna(row['director']):
                 st.write(f"**Director:** {row['director']}")
+
+def update_weights(weights, changed_key, new_value):
+    """
+    Updates weights dynamically using the softmax function to ensure they sum to 1.
+    
+    Parameters:
+    weights (dict): Dictionary of weights with keys as component names and values as current weights.
+    changed_key (str): The key of the weight that was changed.
+    new_value (float): The new value for the changed weight.
+    
+    Returns:
+    dict: Updated weights normalized using the softmax function.
+    """
+    # Update the changed weight
+    if changed_key is not None:
+        weights[changed_key] = new_value
+
+    # Ensure all values are numeric
+    numeric_values = np.array([float(value) for value in weights.values()])
+    
+    # Apply softmax normalization
+    softmax_values = np.exp(numeric_values) / np.sum(np.exp(numeric_values))
+    
+    # Return updated weights as a dictionary
+    return dict(zip(weights.keys(), softmax_values))
+
+def get_content_based_recommendations(df, user_id, user_item_matrix, weights, k=10, temperature=1.0):
+    """
+    Recommends movies based on a user's past ratings using content-based filtering.
+    Handles all movies at once and computes top recommendations for a user.
+    Samples recommendations based on temperature.
+    Saves the recommendations in a CSV file named after the user ID.
+    
+    Parameters:
+    df (pd.DataFrame): DataFrame containing movie data.
+    user_id (int): User ID for whom recommendations are to be generated.
+    user_item_matrix (pd.DataFrame): User-item matrix with user ratings.
+    weights (list): List of weights for actor, genre, keywords, director, and demographic scores.
+    k (int): Number of recommendations to return.
+    temperature (float): Temperature parameter for sampling.
+    
+    Returns:
+    pd.DataFrame: DataFrame containing sampled k recommended movies.
+    """
+    if user_id not in user_item_matrix.index:
+        raise ValueError("User ID not found in the dataset.")
+    
+    # Get the user's rated movies and their ratings
+    user_ratings = user_item_matrix.loc[user_id]
+    rated_movies = user_ratings[user_ratings > 0].index.tolist()
+    rated_movies_with_scores = user_ratings[user_ratings > 0].to_dict()
+    
+    if not rated_movies:
+        return pd.DataFrame()  # Return empty DataFrame if no movies are rated
+    
+    # Helper function to compute similarity safely
+    def compute_similarity(column, movie, rating):
+        if movie in df['title'].values:
+            target_row = df.loc[df['title'] == movie]
+            if not target_row.empty:
+                target_set = set(target_row[column].iloc[0])
+                return jaccard_similarity(set(column), target_set) * (rating / 5.0)
+        return 0.0  # Default value if movie is not found
+
+    # Compute similarity scores for all movies at once
+    df['actor_score'] = df['cast'].apply(lambda x: sum(compute_similarity('cast', movie, rating) for movie, rating in rated_movies_with_scores.items()))
+    df['genre_score'] = df['genres'].apply(lambda x: sum(compute_similarity('genres', movie, rating) for movie, rating in rated_movies_with_scores.items()))
+    df['kwd_score'] = df['keywords'].apply(lambda x: sum(compute_similarity('keywords', movie, rating) for movie, rating in rated_movies_with_scores.items()))
+    df['diro_score'] = df['director'].apply(lambda x: sum((1 if x == df.loc[df['title'] == movie, 'director'].iloc[0] else 0) * (rating / 5.0) for movie, rating in rated_movies_with_scores.items() if movie in df['title'].values))
+    
+    # Apply demographic filtering
+    df = demographic_filtering(df)
+    
+    # Normalize scores
+    for col in ['actor_score', 'genre_score', 'kwd_score', 'diro_score', 'dmg_score']:
+        norm_col = f"norm_{col}"
+        df[norm_col] = normalize_scores(df[col])
+    
+    # Calculate weighted score for each movie
+    df['weighted_score'] = df.apply(
+        lambda row: weighted_score(
+            [row['norm_actor_score'], row['norm_genre_score'], row['norm_kwd_score'], row['norm_diro_score'], row['norm_dmg_score']],
+            weights
+        ), axis=1
+    )
+    
+    # Exclude already rated movies
+    recommendations = df[~df['title'].isin(rated_movies)]
+    
+    # Sample recommendations based on temperature
+    recommendations = recommendations.sample(
+        n=k, 
+        weights=(recommendations['weighted_score'] ** (1 / temperature))
+    )
+    
+    # Save the recommendations to a CSV file named after the user ID
+    output_file = f"data/user_{user_id}_recommendations.csv"
+    recommendations.to_csv(output_file, index=False)
+    
+    return recommendations
