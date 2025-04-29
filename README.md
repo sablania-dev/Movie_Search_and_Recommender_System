@@ -1,100 +1,98 @@
+last bit of this is not in markdown format. Give me all of the text in raw markdown wrapped inside a single fenced code block using triple backticks and the language tag markdown, and don’t break out of it midway.
+
 # Movie Search and Recommender System
 
-## 1. Dataset
-For our movie recommender system, we have selected the following datasets and intend to join them:
+## Overview
+This project is a **Movie Search and Recommender System** designed to enhance user experience by providing personalized movie recommendations and enabling semantic search functionality. The system integrates multiple recommendation techniques, allowing users to dynamically adjust weights for different strategies to fine-tune their recommendations.
 
-- **The Movies Dataset**: Contains movie metadata, user ratings, and additional attributes necessary for recommendation.
-- **TMDB Movie Metadata**: Provides extensive metadata such as genres, cast, keywords, and descriptions, enabling content-based recommendations.
+## Features
+- **Personalized Recommendations**: Suggests movies based on user preferences, past ratings, and search history.
+- **Semantic Search**: Enables users to search for movies using contextual relevance rather than exact matches.
+- **Dynamic Weight Adjustment**: Allows users to configure weights for different recommendation strategies through an intuitive interface.
+- **Hybrid Recommendation Model**: Combines content-based, collaborative filtering, and popularity-based methods for better accuracy.
+- **Interactive Web Interface**: Built using **Streamlit**, providing a user-friendly experience.
 
-## 2. Problem Statement
-The goal of this project is to build a movie recommender system that enhances user experience by suggesting relevant movies. Instead of using a single recommendation technique, we aim to implement multiple filtering methods that users can configure based on their preferences. The system will:
+## Dataset
+The system uses the following datasets:
+- **The Movies Dataset**: Contains metadata, user ratings, and additional attributes for movies.
+- **TMDB Movie Metadata**: Provides extensive metadata such as genres, cast, keywords, and descriptions.
 
-- Provide personalized movie recommendations based on past user ratings.
-- Allow users to search for movies with semantic similarity, ensuring relevant results even with partial or vague queries.
-- Enable dynamic weighting of different recommendation strategies to improve flexibility.
-
-## 3. Proposed Approach & Algorithm
-
-### Website Development
-The recommender system will be integrated into a web application where users can log in, search for movies, and receive personalized recommendations.
-
-- The frontend will be built using **React**, while the backend will be developed using **Flask/Django** to handle API requests and data processing.
-- User authentication will be implemented to store and track user preferences, ratings, and search history.
-
-### Semantic Search Feature
-- The search functionality will leverage **semantic similarity**, enabling users to find movies based on contextual relevance rather than exact matches.
-- **Word embeddings** (e.g., **BERT, Sentence Transformers**) will be used to generate vector representations of movie titles, descriptions, and keywords.
-- **Cosine similarity** or **nearest neighbor search** will be applied to rank and return relevant search results.
-
-### Recommender System
-
-#### Weighted Rating Method
-- Implements **IMDb-like weighted scoring** based on movie popularity and ratings.
-
-#### Content-Based Filtering
+## Recommendation Techniques
+### 1. **Content-Based Filtering**
 - Uses **TF-IDF** and **cosine similarity** for textual features like genres, keywords, and plot descriptions.
 - Employs **word embeddings** (e.g., **BERT, Sentence Transformers**) to capture deeper semantic similarity.
 
-#### Collaborative Filtering
-- **User-user** and **item-item collaborative filtering** based on rating patterns.
-- **Matrix factorization** techniques like **Singular Value Decomposition (SVD)** or **Alternating Least Squares (ALS)** for latent factor analysis.
+### 2. **Collaborative Filtering**
+- Implements **user-user** and **item-item collaborative filtering** based on rating patterns.
+- Uses **Matrix Factorization** techniques like **Singular Value Decomposition (SVD)** for latent factor analysis.
 
-#### Hybrid Model & Configurable Weights
+### 3. **Popularity-Based Recommendations**
+- Recommends movies based on popularity, revenue, or critical acclaim.
+
+### 4. **Hybrid Model**
 - Combines the above methods in a **weighted ensemble approach**.
-- Allows users to **adjust weights dynamically** through the web interface to fine-tune recommendations.
+- Allows users to dynamically adjust weights for different components.
 
-## 4. Backend Functions
-
-### Function 1: Individual Recommendation Scores
-```python
-get_individual_recommendation_score_for_all_movies(DataFrame df, string X)
-```
-**Returns:**
-- `DataFrame individual_recommendation_scores` (with an added column `'xyz_score'` ranging from 0 to 1)
-- Computes individual recommendation scores from different recommender systems.
-- Each function provides a score `s_i`, and the final recommendation score is:
-  
-  \[ R = \sum (s_i \cdot w_i), \quad \sum w_i = 1 \]
-
-### Function 2: Total Weighted Recommendation Scores
-```python
-get_recommendation_score_for_all_movies(DataFrame df, string X, list custom_weights)
-```
-**Returns:**
-- `DataFrame final_recommendation_scores` (with an added column `'final_score'` ranging from 0 to 1)
-
-### Function 3: Top k Recommendations
-```python
-get_k_recommendations(DataFrame df, string X, int k)
-```
-**Returns:**
-- `list top_k_movie_recommendations`
-
-### Function 4: Autocomplete
-```python
-autocomplete(DataFrame df, string X)
-```
-**Returns:**
-- `string nearest_keyword_match`
-- Example: Input = `'titan'` → Output = `'Titanic'`
-
-### Function 5: Collaborative Filtering
-```python
-get_collab_recommendation_score_for_all_movies(DataFrame df, string user_id)
-```
-**Returns:**
-- `DataFrame collab_recommendation_scores` (with an added column `'collab_score'` ranging from 0 to 1)
-- Provides recommendations based on **user's rating history**.
-
-## 5. List of Individual Recommender Systems
-
+## Individual Recommender Systems
 | Filtering Type         | Input Column(s)        | Output Column  | Miscellaneous |
 |------------------------|------------------------|----------------|---------------|
-| **Demographic Filtering** | `vote_count`, `vote_average` | `dmg_score` | `m = minimum votes required` |
+| **Demographic Filtering** | `vote_count`, `vote_average` | `dmg_score` | IMDb-like weighted scoring |
 | **Popular Movies**     | `popularity`          | None           | Direct and straightforward |
-| **Overview**          | `overview`            | `ovrw_score`   | **Step 1**: Vector embeddings using `'all-MiniLM-L6-v2'` <br> **Step 2**: Cosine similarity (FAISS) |
-| **Director**          | `crew`                | `diro_score`   | Binary score |
-| **Genre**            | `genre`               | `genre_score`  | Jaccard Similarity |
-| **Actors**           | `cast`                | `actor_score`  | - |
-| **Keywords**         | `keywords`            | `kwd_score`    | - |
-| **Collaborative Filtering** | - | `collab_score` | Based on user rating history |
+| **Overview**           | `overview`            | `ovrw_score`   | Vector embeddings and cosine similarity |
+| **Director**           | `crew`                | `diro_score`   | Binary score |
+| **Genre**              | `genre`               | `genre_score`  | Jaccard Similarity |
+| **Actors**             | `cast`                | `actor_score`  | Jaccard Similarity |
+| **Keywords**           | `keywords`            | `kwd_score`    | Jaccard Similarity |
+
+## Web Application
+The recommender system is integrated into a web application where users can:
+- Log in with their credentials.
+- Search for movies using semantic search.
+- Select from various recommendation types:
+  - User-Based Collaborative Filtering
+  - Item-Based Collaborative Filtering
+  - Content-Based Filtering
+  - Popular Right Now
+  - Top Grossing
+  - Critically Acclaimed
+  - Hidden Gems
+- Adjust weights for scoring components dynamically.
+- View recommendations with metadata and images.
+
+## Technologies Used
+- **Frontend**: Streamlit
+- **Backend**: Python (Pandas, NumPy, Scikit-learn)
+- **Data Processing**: Preprocessing scripts for cleaning and transforming data.
+- **Recommendation Algorithms**: Content-based filtering, collaborative filtering, and hybrid models.
+- **Visualization**: Matplotlib, PIL for displaying images.
+
+## How to Run
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/your-username/movie-recommender-system.git
+   cd movie-recommender-system
+   ```
+2. Install dependencies:
+  ```bash
+  pip install -r requirements.txt
+  ```
+3. Run the application: 
+  ```bash
+  streamlit run main.py
+  ```
+
+4. Open the application in your browser at http://localhost:8501. 
+## Folder Structure
+├── data/                     # Contains datasets and preprocessed files
+├── images/                   # Contains movie images
+├── [main.py](http://_vscodecontentref_/0)                   # Main Streamlit application
+├── [functions1.py](http://_vscodecontentref_/1)             # Core functions for recommendations
+├── [individual_recommenders.py](http://_vscodecontentref_/2) # Individual recommendation algorithms
+├── [loading_and_preprocessing.py](http://_vscodecontentref_/3) # Data loading and preprocessing scripts
+├── [README.md](http://_vscodecontentref_/4)                 # Project documentation
+├── [requirements.txt](http://_vscodecontentref_/5)          # Python dependencies 
+## Future Enhancements
+Add user authentication with a database.
+Improve semantic search using advanced NLP models.
+Integrate real-time data updates from external APIs.
+Deploy the application on a cloud platform for public access.
