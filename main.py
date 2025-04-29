@@ -4,14 +4,10 @@ import os
 from PIL import Image
 import matplotlib.pyplot as plt
 from loading_and_preprocessing import (
-    load_data,
-    preprocess_data,
-    load_collaborative_data,
-    preprocess_collaborative_data,
     load_or_preprocess_data,
     load_or_preprocess_collaborative_data,
 )
-from functions1 import autocomplete, get_k_recommendations, get_collab_recommendation_score_for_all_movies, display_results_with_images, update_weights, get_content_based_recommendations
+from functions1 import autocomplete, get_k_recommendations, display_results_with_images, update_weights, get_content_recommendations, get_user_cf_recommendations, get_item_cf_recommendations
 
 # Set Streamlit layout to wide
 st.set_page_config(layout="wide")
@@ -33,11 +29,10 @@ with col_right:
     
     # Initialize weights
     weights = {
-        "Actor Score Weight": 0.2,
-        "Genre Score Weight": 0.2,
-        "Keywords Score Weight": 0.2,
-        "Director Score Weight": 0.2,
-        "Demographic Score Weight": 0.2,
+        "Actor Score Weight": 0.25,
+        "Genre Score Weight": 0.25,
+        "Director Score Weight": 0.25,
+        "Demographic Score Weight": 0.25,
     }
 
     # Create sliders dynamically
@@ -58,7 +53,6 @@ with col_right:
     # Extract normalized weights
     weight_actor = weights["Actor Score Weight"]
     weight_genre = weights["Genre Score Weight"]
-    weight_keywords = weights["Keywords Score Weight"]
     weight_director = weights["Director Score Weight"]
     weight_demographic = weights["Demographic Score Weight"]
 
@@ -69,7 +63,6 @@ with col_right:
     st.write("### Current Weights")
     st.write(f"Actor Score Weight: {weight_actor:.2f}")
     st.write(f"Genre Score Weight: {weight_genre:.2f}")
-    st.write(f"Keywords Score Weight: {weight_keywords:.2f}")
     st.write(f"Director Score Weight: {weight_director:.2f}")
     st.write(f"Demographic Score Weight: {weight_demographic:.2f}")
     st.write(f"Temperature: {temperature:.1f}")
@@ -95,31 +88,39 @@ with col_middle:
             st.write(f"Welcome, User {user_id}!")
             
             if int(user_id) in user_item_matrix.index:
-                # Generate collaborative filtering recommendations
-                svd_predictions = user_item_matrix.copy()  # Placeholder for SVD predictions
-                recommendations = get_collab_recommendation_score_for_all_movies(user_item_matrix, int(user_id), svd_predictions)
-                
-                st.subheader("Recommended For You")
-                # Sample recommendations based on temperature
-                recommendations = recommendations.sample(
-                    n=10, 
-                    weights=(recommendations['collab_score'] ** (1 / temperature))
+                # Generate user-based collaborative filtering recommendations
+                user_cf_recommendations = get_user_cf_recommendations(
+                    user_item_matrix, 
+                    int(user_id), 
+                    temperature=temperature, 
+                    n=10
                 )
-                # Display recommendations with images
-                display_results_with_images(recommendations)
                 
+                st.subheader("Recommended For You: User-Based Collaborative Filtering")
+                display_results_with_images(user_cf_recommendations)
+
+                # Generate item-based collaborative filtering recommendations
+                item_cf_recommendations = get_item_cf_recommendations(
+                    user_item_matrix, 
+                    int(user_id), 
+                    temperature=temperature, 
+                    n=10
+                )
+                
+                st.subheader("Recommended For You: Item-Based Collaborative Filtering")
+                display_results_with_images(item_cf_recommendations)
+
                 # Generate content-based filtering recommendations
-                content_recommendations = get_content_based_recommendations(
+                content_recommendations = get_content_recommendations(
                     data, 
                     int(user_id), 
                     user_item_matrix, 
-                    [weight_actor, weight_genre, weight_keywords, weight_director, weight_demographic],
+                    [weight_actor, weight_genre, weight_director, weight_demographic],
                     temperature=temperature
                 )
                 
                 if not content_recommendations.empty:
-                    st.subheader("Content-Based Recommendations")
-                    # Display content-based recommendations with images
+                    st.subheader("Recommended For You: Content-Based Filtering")
                     display_results_with_images(content_recommendations)
                 else:
                     st.write("No content-based recommendations available.")
@@ -140,7 +141,7 @@ with col_middle:
                 data, 
                 complete_input_string, 
                 10, 
-                weights=[weight_actor, weight_genre, weight_keywords, weight_director, weight_demographic]
+                weights=[weight_actor, weight_genre, weight_director, weight_demographic]
             )
             if not filtered_df.empty:
                 st.subheader("Search Results")

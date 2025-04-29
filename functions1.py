@@ -7,6 +7,8 @@ import os
 from PIL import Image
 import streamlit as st
 import numpy as np
+from sklearn.metrics.pairwise import cosine_similarity
+import time  # Import time module for debugging
 
 def weighted_score(scores, weights):
     """
@@ -117,28 +119,6 @@ def get_k_recommendations(df: pd.DataFrame, title: str, k: int, weights=None) ->
     
     return recommendations
 
-def get_collab_recommendation_score_for_all_movies(user_item_matrix, user_id, svd_predictions):
-    """
-    Provides collaborative filtering recommendations based on a user's rating history.
-    """
-    if user_id not in user_item_matrix.index:
-        raise ValueError("User ID not found in the dataset.")
-    
-    # Use precomputed SVD predictions
-    user_svd_scores = svd_predictions.loc[user_id]
-    
-    # Compute user-user similarity using cosine similarity
-    user_similarity = cosine_recommender(user_item_matrix)
-    similar_users = user_similarity[user_id].drop(user_id)
-    
-    # Weighted collaborative score (blending SVD and user similarity)
-    collab_scores = (user_svd_scores * 0.7) + (similar_users.mean() * 0.3)
-    
-    # Normalize scores to range 0-1
-    collab_scores = (collab_scores - collab_scores.min()) / (collab_scores.max() - collab_scores.min())
-    
-    return pd.DataFrame({'title': collab_scores.index, 'collab_score': collab_scores.values}).sort_values(by='collab_score', ascending=False)
-
 def display_results_with_images(results_df):
     """
     Displays results horizontally with images and titles.
@@ -203,10 +183,76 @@ def update_weights(weights, changed_key, new_value):
     # Return updated weights as a dictionary
     return dict(zip(weights.keys(), softmax_values))
 
-def get_content_based_recommendations(df, user_id, user_item_matrix, weights, k=10, temperature=1.0):
+def get_user_cf_recommendations(user_item_matrix, user_id, temperature=1.0, n=10):
+    """
+    Generates user-based collaborative filtering recommendations for a user.
+    
+    Parameters:
+    user_item_matrix (pd.DataFrame): User-item matrix with user ratings.
+    user_id (int): User ID for whom recommendations are to be generated.
+    temperature (float): Temperature parameter for sampling.
+    n (int): Number of recommendations to return.
+    
+    Returns:
+    pd.DataFrame: DataFrame containing sampled n recommended movies with normalized scores.
+    """
+    user_similarity = cosine_recommender(user_item_matrix)
+    similar_users = user_similarity[user_id].drop(user_id)
+    
+    # Align indices of similar_users with user_item_matrix columns
+    similar_users = similar_users.reindex(user_item_matrix.index, fill_value=0)
+    
+    user_cf_scores = user_item_matrix.T.dot(similar_users).sort_values(ascending=False)
+    user_cf_recommendations = pd.DataFrame({'title': user_cf_scores.index, 'score': user_cf_scores.values})
+    
+    # Normalize scores to range [0, 1]
+    user_cf_recommendations['score'] = (user_cf_recommendations['score'] - user_cf_recommendations['score'].min()) / \
+                                       (user_cf_recommendations['score'].max() - user_cf_recommendations['score'].min())
+    
+    # Sample recommendations based on temperature
+    user_cf_recommendations = user_cf_recommendations.sample(
+        n=n, 
+        weights=(user_cf_recommendations['score'] ** (1 / temperature))
+    )
+    
+    return user_cf_recommendations
+
+def get_item_cf_recommendations(user_item_matrix, user_id, temperature=1.0, n=10):
+    """
+    Generates item-based collaborative filtering recommendations for a user.
+    
+    Parameters:
+    user_item_matrix (pd.DataFrame): User-item matrix with user ratings.
+    user_id (int): User ID for whom recommendations are to be generated.
+    temperature (float): Temperature parameter for sampling.
+    n (int): Number of recommendations to return.
+    
+    Returns:
+    pd.DataFrame: DataFrame containing sampled n recommended movies with normalized scores.
+    """
+    # Apply SVD to generate predictions
+    svd_predictions = svd_recommender(user_item_matrix)
+    
+    # Get scores for the given user
+    item_cf_scores = svd_predictions.loc[user_id].sort_values(ascending=False)
+    item_cf_recommendations = pd.DataFrame({'title': item_cf_scores.index, 'score': item_cf_scores.values})
+    
+    # Normalize scores to range [0, 1]
+    item_cf_recommendations['score'] = (item_cf_recommendations['score'] - item_cf_recommendations['score'].min()) / \
+                                       (item_cf_recommendations['score'].max() - item_cf_recommendations['score'].min())
+    
+    # Sample recommendations based on temperature
+    item_cf_recommendations = item_cf_recommendations.sample(
+        n=n, 
+        weights=(item_cf_recommendations['score'] ** (1 / temperature))
+    )
+    
+    return item_cf_recommendations
+
+def get_content_recommendations(df, user_id, user_item_matrix, weights, k=10, temperature=1.0):
     """
     Recommends movies based on a user's past ratings using content-based filtering.
-    Handles all movies at once and computes top recommendations for a user.
+    Integrates actor, genre, and director similarity.
     Samples recommendations based on temperature.
     Saves the recommendations in a CSV file named after the user ID.
     
@@ -214,66 +260,96 @@ def get_content_based_recommendations(df, user_id, user_item_matrix, weights, k=
     df (pd.DataFrame): DataFrame containing movie data.
     user_id (int): User ID for whom recommendations are to be generated.
     user_item_matrix (pd.DataFrame): User-item matrix with user ratings.
-    weights (list): List of weights for actor, genre, keywords, director, and demographic scores.
+    weights (list): List of weights for actor, genre, and director scores.
     k (int): Number of recommendations to return.
     temperature (float): Temperature parameter for sampling.
     
     Returns:
     pd.DataFrame: DataFrame containing sampled k recommended movies.
     """
+    start_time = time.time()  # Start timing the function
     if user_id not in user_item_matrix.index:
         raise ValueError("User ID not found in the dataset.")
     
     # Get the user's rated movies and their ratings
     user_ratings = user_item_matrix.loc[user_id]
-    rated_movies = user_ratings[user_ratings > 0].index.tolist()
-    rated_movies_with_scores = user_ratings[user_ratings > 0].to_dict()
+    rated_movies = user_ratings[user_ratings > 3].index.tolist()
+    rated_movies_with_scores = user_ratings[user_ratings > 3].to_dict()
     
     if not rated_movies:
         return pd.DataFrame()  # Return empty DataFrame if no movies are rated
     
-    # Helper function to compute similarity safely
-    def compute_similarity(column, movie, rating):
+    print(f"[DEBUG] Time to fetch rated movies: {time.time() - start_time:.2f} seconds")
+    
+    # Apply demographic filtering first to reduce the size of the DataFrame
+    demographic_start = time.time()
+    df = demographic_filtering(df)
+    print(f"[DEBUG] Time to apply demographic filtering: {time.time() - demographic_start:.2f} seconds")
+    
+    # Filter out movies with zero demographic scores
+    df = df[df['dmg_score'] > 0]
+    print(f"[DEBUG] Number of movies after demographic filtering: {len(df)}")
+    
+    # Update compute_similarity to accept x as a parameter
+    def compute_similarity(column, x, movie, rating):
         if movie in df['title'].values:
             target_row = df.loc[df['title'] == movie]
             if not target_row.empty:
-                target_set = set(target_row[column].iloc[0])
-                return jaccard_similarity(set(column), target_set) * (rating / 5.0)
+                if column == 'director':
+                    return 1 if x == target_row[column].iloc[0] else 0
+                else:
+                    target_set = set(target_row[column].iloc[0])
+                    return jaccard_similarity(set(x), target_set) * (rating / 5.0)
         return 0.0  # Default value if movie is not found
 
     # Compute similarity scores for all movies at once
-    df['actor_score'] = df['cast'].apply(lambda x: sum(compute_similarity('cast', movie, rating) for movie, rating in rated_movies_with_scores.items()))
-    df['genre_score'] = df['genres'].apply(lambda x: sum(compute_similarity('genres', movie, rating) for movie, rating in rated_movies_with_scores.items()))
-    df['kwd_score'] = df['keywords'].apply(lambda x: sum(compute_similarity('keywords', movie, rating) for movie, rating in rated_movies_with_scores.items()))
-    df['diro_score'] = df['director'].apply(lambda x: sum((1 if x == df.loc[df['title'] == movie, 'director'].iloc[0] else 0) * (rating / 5.0) for movie, rating in rated_movies_with_scores.items() if movie in df['title'].values))
+    similarity_start = time.time()
+    df['actor_score'] = df['cast'].apply(lambda x: sum(compute_similarity('cast', x, movie, rating) for movie, rating in rated_movies_with_scores.items()))
+    print(f"[DEBUG] Time to compute actor scores: {time.time() - similarity_start:.2f} seconds")
     
-    # Apply demographic filtering
-    df = demographic_filtering(df)
+    similarity_start = time.time()
+    df['genre_score'] = df['genres'].apply(lambda x: sum(compute_similarity('genres', x, movie, rating) for movie, rating in rated_movies_with_scores.items()))
+    print(f"[DEBUG] Time to compute genre scores: {time.time() - similarity_start:.2f} seconds")
+    
+    similarity_start = time.time()
+    df['diro_score'] = df['director'].apply(lambda x: sum(compute_similarity('director', x, movie, rating) for movie, rating in rated_movies_with_scores.items()))
+    print(f"[DEBUG] Time to compute director scores: {time.time() - similarity_start:.2f} seconds")
     
     # Normalize scores
-    for col in ['actor_score', 'genre_score', 'kwd_score', 'diro_score', 'dmg_score']:
+    normalization_start = time.time()
+    for col in ['actor_score', 'genre_score', 'diro_score', 'dmg_score']:
         norm_col = f"norm_{col}"
         df[norm_col] = normalize_scores(df[col])
+    print(f"[DEBUG] Time to normalize scores: {time.time() - normalization_start:.2f} seconds")
     
     # Calculate weighted score for each movie
+    weighted_start = time.time()
     df['weighted_score'] = df.apply(
         lambda row: weighted_score(
-            [row['norm_actor_score'], row['norm_genre_score'], row['norm_kwd_score'], row['norm_diro_score'], row['norm_dmg_score']],
+            [row['norm_actor_score'], row['norm_genre_score'], row['norm_diro_score'], row['norm_dmg_score']],
             weights
         ), axis=1
     )
+    print(f"[DEBUG] Time to calculate weighted scores: {time.time() - weighted_start:.2f} seconds")
     
     # Exclude already rated movies
+    exclusion_start = time.time()
     recommendations = df[~df['title'].isin(rated_movies)]
+    print(f"[DEBUG] Time to exclude rated movies: {time.time() - exclusion_start:.2f} seconds")
     
     # Sample recommendations based on temperature
+    sampling_start = time.time()
     recommendations = recommendations.sample(
         n=k, 
         weights=(recommendations['weighted_score'] ** (1 / temperature))
     )
+    print(f"[DEBUG] Time to sample recommendations: {time.time() - sampling_start:.2f} seconds")
     
     # Save the recommendations to a CSV file named after the user ID
+    save_start = time.time()
     output_file = f"data/user_{user_id}_recommendations.csv"
     recommendations.to_csv(output_file, index=False)
+    print(f"[DEBUG] Time to save recommendations: {time.time() - save_start:.2f} seconds")
     
+    print(f"[DEBUG] Total time for get_content_recommendations: {time.time() - start_time:.2f} seconds")
     return recommendations
