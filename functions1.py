@@ -52,31 +52,46 @@ def normalize_scores(series, mean=0.5, std=0.4):
 def display_results_with_images(results_df):
     """
     Displays results horizontally with images and titles.
-    Shows movie metadata on the right side of each image, including weighted score.
+    Shows movie metadata on the right side of each image, including weighted score, year of release, and other details.
     If an image does not exist, a blank template is shown.
+    If required columns are missing, fetches data from preprocessed_movies.csv.
     """
     current_directory = os.getcwd()
     images_folder = os.path.join(current_directory, "images")
-    
+    preprocessed_file = os.path.join(current_directory, "data", "preprocessed_movies.csv")
+
+    # Load preprocessed data if required columns are missing
+    if not {'release_date', 'id'}.issubset(results_df.columns):
+        if os.path.exists(preprocessed_file):
+            preprocessed_data = pd.read_csv(preprocessed_file)
+            results_df = results_df.merge(preprocessed_data[['id', 'release_date']], on='id', how='left')
+
     for index, row in results_df.iterrows():
         # Use the index as the movie ID
         movie_id = index
         title = row['title']
         image_path = os.path.join(images_folder, f"{movie_id}.jpg")
-        
+
+        # Extract year of release from release_date
+        release_year = None
+        if 'release_date' in row and not pd.isna(row['release_date']):
+            release_year = pd.to_datetime(row['release_date'], errors='coerce').year
+
         # Check if the image exists
         if os.path.exists(image_path):
             image = Image.open(image_path)
         else:
             # Create a blank template if the image does not exist
             image = Image.new('RGB', (200, 300), color='gray')
-        
+
         # Display the image and metadata side by side
         col1, col2 = st.columns([1, 2])
         with col1:
             st.image(image, caption=f"{movie_id}: {title}", width=150)
         with col2:
             st.write(f"**Title:** {title}")
+            if release_year:
+                st.write(f"**Year of Release:** {release_year}")
             if 'weighted_score' in row and not pd.isna(row['weighted_score']):
                 st.write(f"**Weighted Score:** {row['weighted_score']:.2f}")
             if 'vote_average' in row and not pd.isna(row['vote_average']):

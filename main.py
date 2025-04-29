@@ -8,6 +8,12 @@ from loading_and_preprocessing import (
     load_or_preprocess_collaborative_data,
 )
 from functions1 import display_results_with_images, update_weights, get_content_recommendations, get_user_cf_recommendations, get_item_cf_recommendations
+from individual_recommenders import (
+    popular_right_now,
+    top_grossing,
+    critically_acclaimed,
+    hidden_gems,
+)
 
 # Set Streamlit layout to wide
 st.set_page_config(layout="wide")
@@ -18,8 +24,8 @@ data = load_or_preprocess_data()
 # Load collaborative filtering data
 user_item_matrix = load_or_preprocess_collaborative_data()
 
-# Split the screen into three columns
-col_left, col_middle, col_right = st.columns([1, 4, 1])
+# Split the screen into two columns (removing the left column)
+col_middle, col_right = st.columns([4, 1])
 
 
 # Right Column: Configuration
@@ -27,6 +33,10 @@ with col_right:
     st.subheader("Configuration")
     st.write("Adjust the weights for scoring components:")
     
+    # Add a temperature slider (display 0 to 1, map to 0.1 to 0.5 internally)
+    display_temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.01)
+    temperature = 0.1 + (display_temperature * 0.4)  # Map 0-1 to 0.1-0.5
+
     # Initialize weights
     weights = {
         "Actor Score Weight": 0.25,
@@ -56,8 +66,6 @@ with col_right:
     weight_director = weights["Director Score Weight"]
     weight_demographic = weights["Demographic Score Weight"]
 
-    # Add a temperature slider
-    temperature = st.slider("Temperature", 0.1, 2.0, 1.0, 0.1)
 
     # Display the current weights and temperature at the bottom
     st.write("### Current Weights")
@@ -65,7 +73,7 @@ with col_right:
     st.write(f"Genre Score Weight: {weight_genre:.2f}")
     st.write(f"Director Score Weight: {weight_director:.2f}")
     st.write(f"Demographic Score Weight: {weight_demographic:.2f}")
-    st.write(f"Temperature: {temperature:.1f}")
+    st.write(f"Temperature (Real Value): {temperature:.2f}")
 
 
 
@@ -82,7 +90,15 @@ with col_middle:
     # Dropdown for selecting recommender type
     recommender_type = st.selectbox(
         "Select Recommender Type",
-        ["User-Based Collaborative Filtering", "Item-Based Collaborative Filtering", "Content-Based Filtering"]
+        [
+            "User-Based Collaborative Filtering",
+            "Item-Based Collaborative Filtering",
+            "Content-Based Filtering",
+            "Popular Right Now",
+            "Top Grossing",
+            "Critically Acclaimed",
+            "Hidden Gems",
+        ]
     )
 
     # Button to show recommendations
@@ -128,40 +144,28 @@ with col_middle:
                         display_results_with_images(content_recommendations)
                     else:
                         st.write("No content-based recommendations available.")
+
+                elif recommender_type == "Popular Right Now":
+                    popular_recommendations = popular_right_now(data, temperature=temperature, n=10)
+                    st.subheader("Recommended For You: Popular Right Now")
+                    display_results_with_images(popular_recommendations)
+
+                elif recommender_type == "Top Grossing":
+                    top_grossing_recommendations = top_grossing(data, temperature=temperature, n=10)
+                    st.subheader("Recommended For You: Top Grossing")
+                    display_results_with_images(top_grossing_recommendations)
+
+                elif recommender_type == "Critically Acclaimed":
+                    critically_acclaimed_recommendations = critically_acclaimed(data, temperature=temperature, n=10)
+                    st.subheader("Recommended For You: Critically Acclaimed")
+                    display_results_with_images(critically_acclaimed_recommendations)
+
+                elif recommender_type == "Hidden Gems":
+                    hidden_gems_recommendations = hidden_gems(data, temperature=temperature, n=10)
+                    st.subheader("Recommended For You: Hidden Gems")
+                    display_results_with_images(hidden_gems_recommendations)
+
             else:
                 st.error("User ID not found in the dataset.")
         else:
             st.error("Invalid User ID or Password.")
-
-
-# Left Column: Scoring Distribution
-with col_left:
-    st.subheader("Debugging")
-    st.write("Scoring Distribution")
-    images_folder = os.path.join(os.getcwd(), "images")
-    os.makedirs(images_folder, exist_ok=True)
-    
-    # Plot histogram for weighted_score
-    if 'weighted_score' in data.columns:
-        fig, ax = plt.subplots()
-        ax.hist(data['weighted_score'], bins=20, color='blue', alpha=0.7)
-        ax.set_title("Weighted Score")
-        ax.set_xlabel("Score")
-        ax.set_ylabel("Number of Movies")
-        histogram_path = os.path.join(images_folder, "weighted_score_histogram.png")
-        plt.savefig(histogram_path)
-        plt.close(fig)
-        st.image(histogram_path, caption="Weighted Score Histogram")
-    
-    # Plot histograms for normalized scores
-    for col in ['norm_actor_score', 'norm_genre_score', 'norm_kwd_score', 'norm_diro_score', 'norm_dmg_score']:
-        if col in data.columns:
-            fig, ax = plt.subplots()
-            ax.hist(data[col], bins=20, color='green', alpha=0.7)
-            ax.set_title(col.replace('_', ' ').title())
-            ax.set_xlabel("Score")
-            ax.set_ylabel("Number of Movies")
-            histogram_path = os.path.join(images_folder, f"{col}_histogram.png")
-            plt.savefig(histogram_path)
-            plt.close(fig)
-            st.image(histogram_path, caption=f"{col.replace('_', ' ').title()} Histogram")

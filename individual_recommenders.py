@@ -2,6 +2,8 @@ import pandas as pd
 from sklearn.decomposition import TruncatedSVD
 from sklearn.metrics.pairwise import cosine_similarity
 import os
+import numpy as np
+from datetime import datetime, timedelta
 
 #### DEMOGRAPHIC FILTERING ####
 
@@ -64,3 +66,78 @@ def cosine_recommender(user_item_matrix):
     """
     similarity_matrix = cosine_similarity(user_item_matrix)
     return pd.DataFrame(similarity_matrix, index=user_item_matrix.index, columns=user_item_matrix.index)
+
+#### TRENDING / POPULARITY-BASED RECOMMENDERS ####
+
+def popular_right_now(df, temperature=1.0, n=10):
+    """
+    Recommends movies that are popular right now based on popularity and recent release dates.
+    """
+    # Calculate the current date as the latest release_date in the dataset
+    current_date = pd.to_datetime(df['release_date'], errors='coerce').max()
+    six_months_ago = current_date - timedelta(days=180)
+
+    # Filter movies released in the past 6 months
+    recent_movies = df[pd.to_datetime(df['release_date'], errors='coerce') >= six_months_ago]
+
+    # Adjust sample size if the population is smaller than n
+    sample_size = min(len(recent_movies), n)
+
+    # Sample recommendations based on popularity
+    if sample_size > 0:
+        recommendations = recent_movies.sample(
+            n=sample_size,
+            weights=(recent_movies['popularity'] ** (1 / temperature))
+        )
+        return recommendations
+    else:
+        return pd.DataFrame()  # Return an empty DataFrame if no movies match the criteria
+
+
+def top_grossing(df, temperature=1.0, n=10):
+    """
+    Recommends top-grossing movies based on revenue.
+    """
+    # Sample recommendations based on revenue
+    recommendations = df.sample(
+        n=n,
+        weights=(df['revenue'] ** (1 / temperature))
+    )
+    return recommendations
+
+
+def critically_acclaimed(df, temperature=1.0, n=10):
+    """
+    Recommends critically acclaimed movies based on dmg_score.
+    """
+    # Sample recommendations based on dmg_score
+    recommendations = df.sample(
+        n=n,
+        weights=(df['dmg_score'] ** (1 / temperature))
+    )
+    return recommendations
+
+
+def hidden_gems(df, temperature=1.0, n=10):
+    """
+    Recommends hidden gems: movies with low popularity but high vote_average or dmg_score.
+    """
+    # Filter movies with low popularity and high vote_average or dmg_score
+    hidden_gems_df = df[(df['popularity'] < df['popularity'].quantile(0.3)) &
+                        (df['vote_average'] > df['vote_average'].quantile(0.7))]
+
+    # Filter rows with non-zero weights
+    hidden_gems_df = hidden_gems_df[hidden_gems_df['dmg_score'] > 0]
+
+    # Adjust sample size if the population is smaller than n
+    sample_size = min(len(hidden_gems_df), n)
+
+    # Sample recommendations based on dmg_score
+    if sample_size > 0:
+        recommendations = hidden_gems_df.sample(
+            n=sample_size,
+            weights=(hidden_gems_df['dmg_score'] ** (1 / temperature))
+        )
+        return recommendations
+    else:
+        return pd.DataFrame()  # Return an empty DataFrame if no movies match the criteria
