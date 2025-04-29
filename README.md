@@ -1,5 +1,3 @@
-last bit of this is not in markdown format. Give me all of the text in raw markdown wrapped inside a single fenced code block using triple backticks and the language tag markdown, and don’t break out of it midway.
-
 # Movie Search and Recommender System
 
 ## Overview
