@@ -1,22 +1,22 @@
 import os
 import pandas as pd
 import numpy as np
+from individual_recommenders import demographic_filtering  # Import the function
 
 
-def load_data(which_data=0):
+def load_data():
     try:
-        if which_data == 0:
-            df1 = pd.read_csv('data/tmdb_5000_credits.csv')
-            df2 = pd.read_csv('data/tmdb_5000_movies.csv')
+        df1 = pd.read_csv('data/tmdb_5000_credits.csv')
+        df2 = pd.read_csv('data/tmdb_5000_movies.csv')
 
-            # Let's join the two dataset on the 'id' column
-            df1.columns = ['id', 'tittle', 'cast', 'crew']
-            df2 = df2.merge(df1, on='id')
+        # Let's join the two dataset on the 'id' column
+        df1.columns = ['id', 'tittle', 'cast', 'crew']
+        df2 = df2.merge(df1, on='id')
 
-            # drop column tittle from df2
-            df2 = df2.drop('tittle', axis=1)
+        # drop column tittle from df2
+        df2 = df2.drop('tittle', axis=1)
 
-            return df2
+        return df2
     except Exception as e:
         raise RuntimeError(f"Error loading data: {e}")
 
@@ -72,6 +72,9 @@ def preprocess_data(df):
     for feature in features:
         df[feature] = df[feature].apply(clean_data)
     
+    # Apply demographic filtering to add the 'dmg_score' column
+    df = demographic_filtering(df)
+
     return df
 
 def load_collaborative_data():
@@ -124,7 +127,7 @@ def load_or_preprocess_data():
     if os.path.exists(preprocessed_file):
         return pd.read_csv(preprocessed_file)
     else:
-        raw_data = load_data(0)
+        raw_data = load_data()
         preprocessed_data = preprocess_data(raw_data)
         preprocessed_data.to_csv(preprocessed_file, index=False)
         return preprocessed_data

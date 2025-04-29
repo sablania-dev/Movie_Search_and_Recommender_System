@@ -35,6 +35,9 @@ def demographic_filtering(df, quantile=0.9):
                   (m / (m + x['vote_count']) * C) if x['vote_count'] >= m else 0, axis=1
     )
     
+    # Ensure 'dmg_score' is numeric after computation
+    df['dmg_score'] = pd.to_numeric(df['dmg_score'], errors='coerce').fillna(0)
+    
     # Update the preprocessed CSV file with the new 'dmg_score' column
     if os.path.exists(preprocessed_file):
         preprocessed_df = pd.read_csv(preprocessed_file)

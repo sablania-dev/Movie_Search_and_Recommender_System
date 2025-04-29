@@ -60,11 +60,6 @@ def display_results_with_images(results_df):
     images_folder = os.path.join(current_directory, "images")
     preprocessed_file = os.path.join(current_directory, "data", "preprocessed_movies.csv")
 
-    # Load preprocessed data if required columns are missing
-    if not {'release_date', 'id'}.issubset(results_df.columns):
-        if os.path.exists(preprocessed_file):
-            preprocessed_data = pd.read_csv(preprocessed_file)
-            results_df = results_df.merge(preprocessed_data[['id', 'release_date']], on='id', how='left')
 
     for index, row in results_df.iterrows():
         # Use the index as the movie ID
@@ -241,11 +236,10 @@ def get_content_recommendations(df, user_id, user_item_matrix, weights, k=10, te
     
     print(f"[DEBUG] Time to fetch rated movies: {time.time() - start_time:.2f} seconds")
     
-    # Apply demographic filtering first to reduce the size of the DataFrame
-    demographic_start = time.time()
-    df = demographic_filtering(df)
-    print(f"[DEBUG] Time to apply demographic filtering: {time.time() - demographic_start:.2f} seconds")
-    
+    # Ensure 'dmg_score' is numeric
+    if 'dmg_score' in df.columns:
+        df['dmg_score'] = pd.to_numeric(df['dmg_score'], errors='coerce').fillna(0)
+
     # Filter out movies with zero demographic scores
     df = df[df['dmg_score'] > 0]
     print(f"[DEBUG] Number of movies after demographic filtering: {len(df)}")
