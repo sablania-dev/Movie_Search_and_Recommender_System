@@ -7,7 +7,7 @@ from loading_and_preprocessing import (
     load_or_preprocess_data,
     load_or_preprocess_collaborative_data,
 )
-from functions1 import autocomplete, get_k_recommendations, display_results_with_images, update_weights, get_content_recommendations, get_user_cf_recommendations, get_item_cf_recommendations
+from functions1 import display_results_with_images, update_weights, get_content_recommendations, get_user_cf_recommendations, get_item_cf_recommendations
 
 # Set Streamlit layout to wide
 st.set_page_config(layout="wide")
@@ -69,7 +69,7 @@ with col_right:
 
 
 
-# Middle Column: Search and Recommendations (already implemented)
+# Middle Column: Recommendations
 with col_middle:
     # Load and display the image with a custom size
     st.image("images/Netflix.jpg", width=300)  # Replace with your image filename
@@ -78,79 +78,60 @@ with col_middle:
     st.subheader("Login")
     user_id = st.text_input("User ID", placeholder="Enter your User ID")
     password = st.text_input("Password", type="password", placeholder="Enter your Password")
-    login_button = st.button("Login")
-    
 
-    if login_button:
+    # Dropdown for selecting recommender type
+    recommender_type = st.selectbox(
+        "Select Recommender Type",
+        ["User-Based Collaborative Filtering", "Item-Based Collaborative Filtering", "Content-Based Filtering"]
+    )
 
+    # Button to show recommendations
+    show_recommendations_button = st.button("Show Recommendations")
+
+    if show_recommendations_button:
         if (int(user_id) in user_item_matrix.index) and password == "1234":  # Static password for all users
             st.success("Login successful!")
             st.write(f"Welcome, User {user_id}!")
-            
+
             if int(user_id) in user_item_matrix.index:
-                # Generate user-based collaborative filtering recommendations
-                user_cf_recommendations = get_user_cf_recommendations(
-                    user_item_matrix, 
-                    int(user_id), 
-                    temperature=temperature, 
-                    n=10
-                )
-                
-                st.subheader("Recommended For You: User-Based Collaborative Filtering")
-                display_results_with_images(user_cf_recommendations)
+                # Generate recommendations based on the selected type
+                if recommender_type == "User-Based Collaborative Filtering":
+                    user_cf_recommendations = get_user_cf_recommendations(
+                        user_item_matrix, 
+                        int(user_id), 
+                        temperature=temperature, 
+                        n=10
+                    )
+                    st.subheader("Recommended For You: User-Based Collaborative Filtering")
+                    display_results_with_images(user_cf_recommendations)
 
-                # Generate item-based collaborative filtering recommendations
-                item_cf_recommendations = get_item_cf_recommendations(
-                    user_item_matrix, 
-                    int(user_id), 
-                    temperature=temperature, 
-                    n=10
-                )
-                
-                st.subheader("Recommended For You: Item-Based Collaborative Filtering")
-                display_results_with_images(item_cf_recommendations)
+                elif recommender_type == "Item-Based Collaborative Filtering":
+                    item_cf_recommendations = get_item_cf_recommendations(
+                        user_item_matrix, 
+                        int(user_id), 
+                        temperature=temperature, 
+                        n=10
+                    )
+                    st.subheader("Recommended For You: Item-Based Collaborative Filtering")
+                    display_results_with_images(item_cf_recommendations)
 
-                # Generate content-based filtering recommendations
-                content_recommendations = get_content_recommendations(
-                    data, 
-                    int(user_id), 
-                    user_item_matrix, 
-                    [weight_actor, weight_genre, weight_director, weight_demographic],
-                    temperature=temperature
-                )
-                
-                if not content_recommendations.empty:
-                    st.subheader("Recommended For You: Content-Based Filtering")
-                    display_results_with_images(content_recommendations)
-                else:
-                    st.write("No content-based recommendations available.")
+                elif recommender_type == "Content-Based Filtering":
+                    content_recommendations = get_content_recommendations(
+                        data, 
+                        int(user_id), 
+                        user_item_matrix, 
+                        [weight_actor, weight_genre, weight_director, weight_demographic],
+                        temperature=temperature
+                    )
+                    if not content_recommendations.empty:
+                        st.subheader("Recommended For You: Content-Based Filtering")
+                        display_results_with_images(content_recommendations)
+                    else:
+                        st.write("No content-based recommendations available.")
             else:
                 st.error("User ID not found in the dataset.")
         else:
             st.error("Invalid User ID or Password.")
-
-    st.subheader("Search Movies")
-    user_input = st.text_input("Search", placeholder="Search for Movies...")
-    search_button = st.button("🔍 Search")
-
-    # Display REAL search results when button is clicked
-    if search_button:
-        if user_input:
-            complete_input_string = autocomplete(data, user_input)
-            filtered_df = get_k_recommendations(
-                data, 
-                complete_input_string, 
-                10, 
-                weights=[weight_actor, weight_genre, weight_director, weight_demographic]
-            )
-            if not filtered_df.empty:
-                st.subheader("Search Results")
-                # Display search results with images
-                display_results_with_images(filtered_df)
-            else:
-                st.write("No results found.")
-        else:
-            st.write("Please enter a search term.")
 
 
 # Left Column: Scoring Distribution

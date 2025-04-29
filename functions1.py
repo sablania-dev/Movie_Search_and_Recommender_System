@@ -1,13 +1,10 @@
 import difflib
 import pandas as pd
-from individual_recommenders import actors_director_keywords_genres
-from loading_and_preprocessing import preprocess_collaborative_data
-from individual_recommenders import svd_recommender, cosine_recommender, demographic_filtering, jaccard_similarity
+from individual_recommenders import svd_recommender, cosine_recommender, demographic_filtering
 import os
 from PIL import Image
 import streamlit as st
 import numpy as np
-from sklearn.metrics.pairwise import cosine_similarity
 import time  # Import time module for debugging
 
 def weighted_score(scores, weights):
@@ -36,26 +33,6 @@ def weighted_score(scores, weights):
     return weighted_sum / total_weight
 
 
-def autocomplete(df: pd.DataFrame, X: str) -> str:
-    """
-    Returns the nearest keyword match from df['title'] based on the input string X.
-    
-    Parameters:
-    df (pd.DataFrame): DataFrame containing a 'title' column.
-    X (str): Input string to be matched.
-    
-    Returns:
-    str: The closest matching title from the DataFrame.
-    """
-    if 'title' not in df.columns:
-        raise ValueError("DataFrame must contain a 'title' column")
-    
-    titles = df['title'].astype(str).tolist()
-    matches = difflib.get_close_matches(X, titles, n=1, cutoff=0.4)
-    
-    return matches[0] if matches else "No match found"
-
-
 def normalize_scores(series, mean=0.5, std=0.4):
     """
     Normalizes a pandas Series using standardization with a default mean of 0.5 and std of 0.4.
@@ -71,53 +48,6 @@ def normalize_scores(series, mean=0.5, std=0.4):
     """
     normalized = (series - series.mean()) / series.std() * std + mean
     return normalized.clip(0, 1)  # Clip values to the range [0, 1]
-
-def get_k_recommendations(df: pd.DataFrame, title: str, k: int, weights=None) -> pd.DataFrame:
-    """
-    Get top k movie recommendations based on similarity scores and demographic score.
-    
-    Parameters:
-    df (pd.DataFrame): DataFrame containing movie data with similarity scores.
-    title (str): The title of the movie for which recommendations are to be found.
-    k (int): The number of recommendations to return.
-    weights (list): List of weights for actor, genre, keywords, director, and demographic scores.
-    
-    Returns:
-    pd.DataFrame: DataFrame containing top k recommended movies.
-    """
-    if title not in df['title'].values:
-        raise ValueError("Movie not found in dataset.")
-    
-    # Default weights if none are provided
-    if weights is None:
-        weights = [0.2, 0.2, 0.2, 0.2, 0.2]
-    
-    # Compute similarity scores
-    df = actors_director_keywords_genres(df, title)
-    df = demographic_filtering(df)
-    
-    # Ensure required columns exist and are numeric
-    for col in ['actor_score', 'genre_score', 'kwd_score', 'diro_score', 'dmg_score']:
-        if col not in df.columns or not pd.api.types.is_numeric_dtype(df[col]):
-            raise ValueError(f"Column '{col}' is missing or not numeric in the DataFrame.")
-    
-    # Normalize scores using the new normalization function and add new columns
-    for col in ['actor_score', 'genre_score', 'kwd_score', 'diro_score', 'dmg_score']:
-        norm_col = f"norm_{col}"
-        df[norm_col] = normalize_scores(df[col])
-    
-    # Calculate weighted score for each row, incorporating normalized scores
-    df['weighted_score'] = df.apply(
-        lambda row: weighted_score(
-            [row['norm_actor_score'], row['norm_genre_score'], row['norm_kwd_score'], row['norm_diro_score'], row['norm_dmg_score']],
-            weights
-        ), axis=1
-    )
-    
-    # Sort by weighted score and return top k recommendations
-    recommendations = df.sort_values(by='weighted_score', ascending=False).head(k)
-    
-    return recommendations
 
 def display_results_with_images(results_df):
     """
@@ -249,6 +179,21 @@ def get_item_cf_recommendations(user_item_matrix, user_id, temperature=1.0, n=10
     
     return item_cf_recommendations
 
+def jaccard_similarity(set1, set2):
+    """
+    Computes the Jaccard similarity between two sets.
+    
+    Parameters:
+    set1 (set): First set of elements.
+    set2 (set): Second set of elements.
+    
+    Returns:
+    float: Jaccard similarity score between 0 and 1.
+    """
+    if not set1 or not set2:  # Handle empty sets
+        return 0.0
+    return len(set1.intersection(set2)) / len(set1.union(set2))
+
 def get_content_recommendations(df, user_id, user_item_matrix, weights, k=10, temperature=1.0):
     """
     Recommends movies based on a user's past ratings using content-based filtering.
@@ -273,7 +218,7 @@ def get_content_recommendations(df, user_id, user_item_matrix, weights, k=10, te
     
     # Get the user's rated movies and their ratings
     user_ratings = user_item_matrix.loc[user_id]
-    rated_movies = user_ratings[user_ratings > 3].index.tolist()
+    rated_movies = user_ratings[user_ratings > 3.5].index.tolist()
     rated_movies_with_scores = user_ratings[user_ratings > 3].to_dict()
     
     if not rated_movies:
